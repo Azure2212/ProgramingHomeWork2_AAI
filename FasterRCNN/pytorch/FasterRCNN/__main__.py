@@ -10,6 +10,7 @@
 #
 
 #/data2/atran16/Anaconda_ForTrain/bin/python -m pytorch.FasterRCNN --backbone=resnet50 --load-from=fasterrcnn_pytorch_resnet50.pth --predict=garyTest.jpg --save-output-path=/data2/atran16/FasterRCNN/docs/images/testne.png
+#wget https://calla.rnet.missouri.edu/cryoppp/10005.tar.gz http://trzy.org/files/fasterrcnn/fasterrcnn_pytorch_resnet50.pth
 
 #
 # TODO
