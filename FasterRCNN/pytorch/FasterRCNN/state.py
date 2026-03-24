@@ -266,7 +266,7 @@ def load(model, filepath):
   # Load
   try:
     model.load_state_dict(state)
-    print("Loaded initial weights from '%s'" % filepath)
+    #print("Loaded initial weights from '%s'" % filepath)
   except Exception as e:
     print(e)
     return

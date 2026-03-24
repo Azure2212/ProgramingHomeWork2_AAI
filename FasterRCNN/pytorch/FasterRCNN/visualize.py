@@ -86,4 +86,5 @@ def show_detections(output_path, show_image, image, scored_boxes_by_class_index,
     image.show()
   if output_path is not None:
     image.save(output_path)
-    print("Wrote detection results to '%s'" % output_path)
+    #print("Wrote detection results to '%s'" % output_path)
+

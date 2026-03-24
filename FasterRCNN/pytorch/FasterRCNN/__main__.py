@@ -10,7 +10,6 @@
 #
 
 #/data2/atran16/Anaconda_ForTrain/bin/python -m pytorch.FasterRCNN --backbone=resnet50 --load-from=fasterrcnn_pytorch_resnet50.pth --predict=garyTest.jpg --save-output-path=/data2/atran16/FasterRCNN/docs/images/testne.png
-#wget https://calla.rnet.missouri.edu/cryoppp/10005.tar.gz http://trzy.org/files/fasterrcnn/fasterrcnn_pytorch_resnet50.pth
 
 #
 # TODO
@@ -53,8 +52,8 @@ def render_anchors(backbone):
   print("Rendering anchors from '%s' to set '%s'..." % (options.train_split, options.dump_anchors))
   for sample in iter(training_data):
     output_path = os.path.join(options.dump_anchors, "anchors_" + os.path.basename(sample.filepath) + ".png")
-    print("---------")
-    print(output_path)
+    ##print("---------")
+    #print(output_path)
     visualize.show_anchors(
       output_path = output_path,
       image = sample.image,
@@ -242,9 +241,6 @@ def predict(model, image_data, image, show_image, output_path):
 def predict_one(model, url, show_image, output_path):
   from .datasets import image
   image_data, image_obj, _, _ = image.load_image(url = url, preprocessing = model.backbone.image_preprocessing_params, min_dimension_pixels = 600)
-  print("co vo day ko")
-  print(url)
-  print(output_path)
   predict(model = model, image_data = image_data, image = image_obj, show_image = show_image, output_path = output_path)
 
 def predict_all(model, split):
@@ -336,10 +332,8 @@ if __name__ == "__main__":
   elif options.eval:
     evaluate(model = model, plot = options.plot, print_average_precisions = True)
   elif options.predict:
-    print(f'cc:{options.save_output_path}')
     predict_one(model = model, url = options.predict, show_image = True, output_path = options.save_output_path)
   elif options.predict_to_file:
-    print('cl')
     predict_one(model = model, url = options.predict_to_file, show_image = False, output_path = "predictions.png")
   elif options.predict_all:
     predict_all(model = model, split = options.predict_all)
