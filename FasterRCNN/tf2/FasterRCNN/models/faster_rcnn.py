@@ -52,143 +52,142 @@ from . import math_utils
 
 
 class FasterRCNNModel(tf.keras.Model):
-  def __init__(self, num_classes, allow_edge_proposals, custom_roi_pool, activate_class_outputs, l2 = 0, dropout_probability = 0):
-    super().__init__()
-    self._num_classes = num_classes
-    self._activate_class_outputs = activate_class_outputs
-    self._stage1_feature_extractor = vgg16.FeatureExtractor(l2 = l2)
-    self._stage2_region_proposal_network = rpn.RegionProposalNetwork(
-      max_proposals_pre_nms_train = 12000,
-      max_proposals_post_nms_train = 2000,
-      max_proposals_pre_nms_infer = 6000,
-      max_proposals_post_nms_infer = 300,
-      l2 = l2,
-      allow_edge_proposals = allow_edge_proposals
-    )
-    self._stage3_detector_network = detector.DetectorNetwork(
-      num_classes = num_classes,
-      custom_roi_pool = custom_roi_pool,
-      activate_class_outputs = activate_class_outputs,
-      l2 = l2,
-      dropout_probability = dropout_probability
-    )
-    
-    @property
-    def metrics(self):
-        # This ensures Keras tracks the metrics correctly during training
-        return [
-            self.rpn_class_loss_tracker,
-            self.rpn_regression_loss_tracker,
-            self.detector_class_loss_tracker,
-            self.detector_regression_loss_tracker
-        ]
+  def __init__(self, num_classes, allow_edge_proposals, custom_roi_pool, activate_class_outputs, l2=0, dropout_probability=0):
+      super().__init__()
+      self._num_classes = num_classes
+      self._activate_class_outputs = activate_class_outputs
 
-  def call(self, inputs, training = False):
-    # Unpack inputs
-    input_image = inputs[0]             # (1, height_pixels, width_pixels, 3)
-    anchor_map = inputs[1]              # (1, height, width, num_anchors * 4)
-    anchor_valid_map = inputs[2]        # (1, height, width, num_anchors)
-    if training:
-      gt_rpn_map = inputs[3]            # (1, height, width, num_anchors, 6)
-      gt_box_class_idxs_map = inputs[4] # (1, num_gt_boxes)
-      gt_box_corners_map = inputs[5]    # (1, num_gt_boxes, 4)
+      # Stage 1: feature extractor
+      self._stage1_feature_extractor = vgg16.FeatureExtractor(l2=l2)
 
-    # Stage 1: Extract features
-    feature_map = self._stage1_feature_extractor(input_image = input_image, training = training)
-
-    # Stage 2: Generate object proposals using RPN
-    rpn_scores, rpn_box_deltas, proposals = self._stage2_region_proposal_network(
-      inputs = [
-        input_image,
-        feature_map,
-        anchor_map,
-        anchor_valid_map
-      ],
-      training = training
-    )
-
-    # If training, we must generate ground truth data for the detector stage
-    # from RPN outputs
-    if training:
-      # Assign labels to proposals and take random sample (for detector training)
-      proposals, gt_classes, gt_box_deltas = self._label_proposals(
-        proposals = proposals,
-        gt_box_class_idxs = gt_box_class_idxs_map[0], # for now, batch size of 1
-        gt_box_corners = gt_box_corners_map[0],
-        min_background_iou_threshold = 0.0,
-        min_object_iou_threshold = 0.5
+      # Stage 2: region proposal network
+      self._stage2_region_proposal_network = rpn.RegionProposalNetwork(
+          max_proposals_pre_nms_train=12000,
+          max_proposals_post_nms_train=2000,
+          max_proposals_pre_nms_infer=6000,
+          max_proposals_post_nms_infer=300,
+          l2=l2,
+          allow_edge_proposals=allow_edge_proposals
       )
-      proposals, gt_classes, gt_box_deltas = self._sample_proposals(
-        proposals = proposals,
-        gt_classes = gt_classes,
-        gt_box_deltas = gt_box_deltas,
-        max_proposals = 128,
-        positive_fraction = 0.25
+
+      # Stage 3: detector network
+      self._stage3_detector_network = detector.DetectorNetwork(
+          num_classes=num_classes,
+          custom_roi_pool=custom_roi_pool,
+          activate_class_outputs=activate_class_outputs,
+          l2=l2,
+          dropout_probability=dropout_probability
       )
-      gt_classes = tf.expand_dims(gt_classes, axis = 0)           # (N,num_classes) -> (1,N,num_classes) (as expected by loss function)
-      gt_box_deltas = tf.expand_dims(gt_box_deltas, axis = 0)   # (N,2,(num_classes-1)*4) -> (1,N,2,(num_classes-1)*4)
 
-      # Ensure proposals are treated as constants and do not propagate gradients
-      proposals = tf.stop_gradient(proposals)
-      gt_classes = tf.stop_gradient(gt_classes)
-      gt_box_deltas = tf.stop_gradient(gt_box_deltas)
+      # Metric trackers for Keras 3 compatibility
+      self.rpn_class_loss_tracker = tf.keras.metrics.Mean(name="rpn_class_loss")
+      self.rpn_regression_loss_tracker = tf.keras.metrics.Mean(name="rpn_regression_loss")
+      self.detector_class_loss_tracker = tf.keras.metrics.Mean(name="detector_class_loss")
+      self.detector_regression_loss_tracker = tf.keras.metrics.Mean(name="detector_regression_loss")
 
-    # Stage 3: Detector
-    detector_classes, detector_box_deltas = self._stage3_detector_network(
-      inputs = [
-        input_image,
-        feature_map,
-        proposals
-      ],
-      training = training
-    )
+  @property
+  def metrics(self):
+      # This ensures Keras tracks the metrics correctly during training
+      return [
+          self.rpn_class_loss_tracker,
+          self.rpn_regression_loss_tracker,
+          self.detector_class_loss_tracker,
+          self.detector_regression_loss_tracker
+      ]
 
-    # Losses
-    if training:
-      rpn_class_loss = self._stage2_region_proposal_network.class_loss(
+  def call(self, inputs, training=False):
+      # Unpack inputs
+      input_image = inputs[0]             # (1, H, W, 3)
+      anchor_map = inputs[1]              # (1, H', W', num_anchors * 4)
+      anchor_valid_map = inputs[2]        # (1, H', W', num_anchors)
+
+      if training:
+          gt_rpn_map = inputs[3]            # (1, H', W', num_anchors, 6)
+          gt_box_class_idxs_map = inputs[4] # (1, num_gt_boxes)
+          gt_box_corners_map = inputs[5]    # (1, num_gt_boxes, 4)
+
+      # Stage 1: Feature extraction
+      feature_map = self._stage1_feature_extractor(input_image=input_image, training=training)
+
+      # Stage 2: RPN proposals
+      rpn_scores, rpn_box_deltas, proposals = self._stage2_region_proposal_network(
+          inputs=[input_image, feature_map, anchor_map, anchor_valid_map],
+          training=training
+      )
+
+      # Stage 2 → 3: Prepare ground truth for detector
+      if training:
+          proposals, gt_classes, gt_box_deltas = self._label_proposals(
+              proposals=proposals,
+              gt_box_class_idxs=gt_box_class_idxs_map[0],  # batch size 1
+              gt_box_corners=gt_box_corners_map[0],
+              min_background_iou_threshold=0.0,
+              min_object_iou_threshold=0.5
+          )
+          proposals, gt_classes, gt_box_deltas = self._sample_proposals(
+              proposals=proposals,
+              gt_classes=gt_classes,
+              gt_box_deltas=gt_box_deltas,
+              max_proposals=128,
+              positive_fraction=0.25
+          )
+
+          gt_classes = tf.expand_dims(gt_classes, axis=0)
+          gt_box_deltas = tf.expand_dims(gt_box_deltas, axis=0)
+          proposals = tf.stop_gradient(proposals)
+          gt_classes = tf.stop_gradient(gt_classes)
+          gt_box_deltas = tf.stop_gradient(gt_box_deltas)
+
+      # Stage 3: Detector network
+      detector_classes, detector_box_deltas = self._stage3_detector_network(
+          inputs=[input_image, feature_map, proposals],
+          training=training
+      )
+
+      # Compute losses
+      if training:
+          rpn_class_loss = self._stage2_region_proposal_network.class_loss(
               y_predicted=rpn_scores, gt_rpn_map=gt_rpn_map
           )
-      rpn_regression_loss = self._stage2_region_proposal_network.regression_loss(
+          rpn_regression_loss = self._stage2_region_proposal_network.regression_loss(
               y_predicted=rpn_box_deltas, gt_rpn_map=gt_rpn_map
           )
-      detector_class_loss = self._stage3_detector_network.class_loss(
+          detector_class_loss = self._stage3_detector_network.class_loss(
               y_predicted=detector_classes, y_true=gt_classes, from_logits=not self._activate_class_outputs
           )
-      detector_regression_loss = self._stage3_detector_network.regression_loss(
+          detector_regression_loss = self._stage3_detector_network.regression_loss(
               y_predicted=detector_box_deltas, y_true=gt_box_deltas
           )
 
           # Add to model losses
-      self.add_loss(rpn_class_loss)
-      self.add_loss(rpn_regression_loss)
-      self.add_loss(detector_class_loss)
-      self.add_loss(detector_regression_loss)
+          self.add_loss(rpn_class_loss)
+          self.add_loss(rpn_regression_loss)
+          self.add_loss(detector_class_loss)
+          self.add_loss(detector_regression_loss)
 
-      # Update metric trackers
-      self.rpn_class_loss_tracker.update_state(rpn_class_loss)
-      self.rpn_regression_loss_tracker.update_state(rpn_regression_loss)
-      self.detector_class_loss_tracker.update_state(detector_class_loss)
-      self.detector_regression_loss_tracker.update_state(detector_regression_loss)
+          # Update metric trackers
+          self.rpn_class_loss_tracker.update_state(rpn_class_loss)
+          self.rpn_regression_loss_tracker.update_state(rpn_regression_loss)
+          self.detector_class_loss_tracker.update_state(detector_class_loss)
+          self.detector_regression_loss_tracker.update_state(detector_regression_loss)
 
-    else:
-      # Inference mode
-      rpn_class_loss = rpn_regression_loss = detector_class_loss = detector_regression_loss = float("inf")
+      else:
+          # Inference mode
+          rpn_class_loss = rpn_regression_loss = detector_class_loss = detector_regression_loss = float("inf")
 
       # Return predictions + losses for debugging
-
-    # Return outputs
-    return [
-      rpn_scores,
-      rpn_box_deltas,
-      detector_classes,
-      detector_box_deltas,
-      proposals,
-      rpn_class_loss,
-      rpn_regression_loss,
-      detector_class_loss,
-      detector_regression_loss
-   ]
-
+      return [
+          rpn_scores,
+          rpn_box_deltas,
+          detector_classes,
+          detector_box_deltas,
+          proposals,
+          rpn_class_loss,
+          rpn_regression_loss,
+          detector_class_loss,
+          detector_regression_loss
+      ]
+        
   def predict_on_batch(self, x, score_threshold):
     """
     Use this method to run inference. Overrides the default Keras
