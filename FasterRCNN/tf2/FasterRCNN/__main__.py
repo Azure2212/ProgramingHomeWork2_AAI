@@ -385,12 +385,12 @@ if __name__ == "__main__":
     ]
   )
   model.compile(optimizer = create_optimizer()) # losses not needed here because they were baked in at model construction
-  if options.load_from:
-    model.load_weights(filepath = options.load_from, by_name = True)
-    print("Loaded initial weights from '%s'" % options.load_from)
-  else:
-    model.load_imagenet_weights()
-    print("Initialized VGG-16 layers to Keras ImageNet weights")
+  # if options.load_from:
+  #   model.load_weights(filepath = options.load_from, by_name = True)
+  #   print("Loaded initial weights from '%s'" % options.load_from)
+  # else:
+  #   model.load_imagenet_weights()
+  #   print("Initialized VGG-16 layers to Keras ImageNet weights")
 
   # Perform mutually exclusive procedures
   if options.train:
