@@ -88,10 +88,32 @@ class Dataset:
       raise FileNotFoundError("Dataset directory does not exist: %s" % dir)
     self.split = split
     self._dir = dir
-    self.class_index_to_name = self._get_classes()
+    self.class_index_to_name = {
+    0:  "background",
+    1:  "aeroplane",
+    2:  "bicycle",
+    3:  "bird",
+    4:  "boat",
+    5:  "bottle",
+    6:  "bus",
+    7:  "car",
+    8:  "cat",
+    9:  "chair",
+    10: "cow",
+    11: "diningtable",
+    12: "dog",
+    13: "horse",
+    14: "motorbike",
+    15: "person",
+    16: "pottedplant",
+    17: "sheep",
+    18: "sofa",
+    19: "train",
+    20: "tvmonitor"
+  }
     self.class_name_to_index = { class_name: class_index for (class_index, class_name) in self.class_index_to_name.items() }
     self.num_classes = len(self.class_index_to_name)
-    assert self.num_classes == Dataset.num_classes, "Dataset does not have the expected number of classes (found %d but expected %d)" % (self.num_classes, Dataset.num_classes)
+    assert self.num_classes == 21, "Dataset does not have the expected number of classes (found %d but expected %d)" % (self.num_classes, Dataset.num_classes)
     assert self.class_index_to_name == Dataset.class_index_to_name, "Dataset does not have the expected class mapping"
     self._filepaths = self._get_filepaths()
     self.num_samples = len(self._filepaths)
