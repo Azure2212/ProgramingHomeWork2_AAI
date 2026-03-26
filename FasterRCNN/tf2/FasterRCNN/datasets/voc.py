@@ -207,9 +207,8 @@ class Dataset:
 
   def _get_filepaths(self):
     image_list_file = os.path.join(self._dir, "ImageSets", "Main", self.split + ".txt")
-    if "test.txt" not in image_list_file:
-      with open(image_list_file) as fp:
-        basenames = [ line.strip() for line in fp.readlines() ] # strip newlines
+    with open(image_list_file) as fp:
+      basenames = [ line.strip() for line in fp.readlines() ] # strip newlines
     image_paths = [ os.path.join(self._dir, "JPEGImages", basename) + ".jpg" for basename in basenames ]
     return image_paths
     # Debug: 60 car training images from VOC2012.
