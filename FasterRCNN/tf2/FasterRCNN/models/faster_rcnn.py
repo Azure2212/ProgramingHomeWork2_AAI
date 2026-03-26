@@ -72,6 +72,16 @@ class FasterRCNNModel(tf.keras.Model):
       l2 = l2,
       dropout_probability = dropout_probability
     )
+    
+    @property
+    def metrics(self):
+        # This ensures Keras tracks the metrics correctly during training
+        return [
+            self.rpn_class_loss_tracker,
+            self.rpn_regression_loss_tracker,
+            self.detector_class_loss_tracker,
+            self.detector_regression_loss_tracker
+        ]
 
   def call(self, inputs, training = False):
     # Unpack inputs
@@ -135,24 +145,36 @@ class FasterRCNNModel(tf.keras.Model):
 
     # Losses
     if training:
-      rpn_class_loss = self._stage2_region_proposal_network.class_loss(y_predicted = rpn_scores, gt_rpn_map = gt_rpn_map)
-      rpn_regression_loss = self._stage2_region_proposal_network.regression_loss(y_predicted = rpn_box_deltas, gt_rpn_map = gt_rpn_map)
-      detector_class_loss = self._stage3_detector_network.class_loss(y_predicted = detector_classes, y_true = gt_classes, from_logits = not self._activate_class_outputs)
-      detector_regression_loss = self._stage3_detector_network.regression_loss(y_predicted = detector_box_deltas, y_true = gt_box_deltas)
+      rpn_class_loss = self._stage2_region_proposal_network.class_loss(
+              y_predicted=rpn_scores, gt_rpn_map=gt_rpn_map
+          )
+      rpn_regression_loss = self._stage2_region_proposal_network.regression_loss(
+              y_predicted=rpn_box_deltas, gt_rpn_map=gt_rpn_map
+          )
+      detector_class_loss = self._stage3_detector_network.class_loss(
+              y_predicted=detector_classes, y_true=gt_classes, from_logits=not self._activate_class_outputs
+          )
+      detector_regression_loss = self._stage3_detector_network.regression_loss(
+              y_predicted=detector_box_deltas, y_true=gt_box_deltas
+          )
+
+          # Add to model losses
       self.add_loss(rpn_class_loss)
       self.add_loss(rpn_regression_loss)
       self.add_loss(detector_class_loss)
       self.add_loss(detector_regression_loss)
-      self.add_metric(rpn_class_loss, name = "rpn_class_loss")
-      self.add_metric(rpn_regression_loss, name = "rpn_regression_loss")
-      self.add_metric(detector_class_loss, name = "detector_class_loss")
-      self.add_metric(detector_regression_loss, name = "detector_regression_loss")
+
+      # Update metric trackers
+      self.rpn_class_loss_tracker.update_state(rpn_class_loss)
+      self.rpn_regression_loss_tracker.update_state(rpn_regression_loss)
+      self.detector_class_loss_tracker.update_state(detector_class_loss)
+      self.detector_regression_loss_tracker.update_state(detector_regression_loss)
+
     else:
-      # Losses cannot be computed during inference and should be ignored
-      rpn_class_loss = float("inf")
-      rpn_regression_loss = float("inf")
-      detector_class_loss = float("inf")
-      detector_regression_loss = float("inf")
+      # Inference mode
+      rpn_class_loss = rpn_regression_loss = detector_class_loss = detector_regression_loss = float("inf")
+
+      # Return predictions + losses for debugging
 
     # Return outputs
     return [
